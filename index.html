@@ -1,0 +1,187 @@
+<!DOCTYPE html>
+<html lang="pl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Kółko i Krzyżyk na Base</title>
+    <script src="https://cdn.ethers.io/lib/ethers-5.2.umd.min.js"></script>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            height: 100vh;
+            background-color: #f0f2f5;
+            color: #333;
+        }
+        h1 {
+            color: #0052FF;
+        }
+        #status {
+            margin-bottom: 20px;
+            font-size: 1.2em;
+            font-weight: bold;
+        }
+        #board {
+            display: grid;
+            grid-template-columns: repeat(3, 100px);
+            grid-gap: 5px;
+            background-color: #fff;
+            padding: 10px;
+            border-radius: 8px;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+        }
+        .cell {
+            width: 100px;
+            height: 100px;
+            background-color: #e0e0e0;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 3em;
+            cursor: pointer;
+            border-radius: 4px;
+            transition: background-color 0.3s;
+        }
+        .cell:hover {
+            background-color: #d0d0d0;
+        }
+        #connectButton {
+            margin-top: 20px;
+            padding: 10px 20px;
+            font-size: 1em;
+            cursor: pointer;
+            background-color: #0052FF;
+            color: white;
+            border: none;
+            border-radius: 5px;
+        }
+    </style>
+</head>
+<body>
+
+    <h1>Kółko i Krzyżyk na Base</h1>
+    <div id="status">Łączenie z portfelem...</div>
+    <div id="board"></div>
+    <button id="connectButton">Połącz z MetaMask</button>
+
+    <script>
+        // UWAGA! ZMIEŃ TO NA ADRES TWOJEGO WŁASNEGO KONTRAKTU!
+        const contractAddress = "0x...";
+
+        // UWAGA! Wklej tutaj skopiowany ABI swojego kontraktu!
+        const contractABI = [
+            "function makeMove(uint256 index) public",
+            "function joinGame() public",
+            "function reset() public",
+            "function board(uint256 index) public view returns (uint8)",
+            "function playerX() public view returns (address)",
+            "function playerO() public view returns (address)",
+            "function currentPlayer() public view returns (address)",
+            "function isGameActive() public view returns (bool)",
+            "event MoveMade(uint256 indexed index, uint8 symbol)",
+            "event GameEnded(address indexed winner, string message)"
+        ];
+
+        let provider;
+        let signer;
+        let contract;
+        let userAddress;
+        let isX = false;
+        let isO = false;
+
+        const boardDiv = document.getElementById('board');
+        const statusDiv = document.getElementById('status');
+        const connectButton = document.getElementById('connectButton');
+
+        async function connectWallet() {
+            if (typeof window.ethereum !== 'undefined') {
+                try {
+                    await window.ethereum.request({ method: 'eth_requestAccounts' });
+                    provider = new ethers.providers.Web3Provider(window.ethereum);
+                    signer = provider.getSigner();
+                    userAddress = await signer.getAddress();
+                    contract = new ethers.Contract(contractAddress, contractABI, signer);
+                    statusDiv.textContent = "Połączono!";
+                    connectButton.style.display = 'none';
+                    initGame();
+                } catch (error) {
+                    statusDiv.textContent = "Błąd połączenia: " + error.message;
+                }
+            } else {
+                statusDiv.textContent = "Zainstaluj MetaMask!";
+            }
+        }
+
+        async function initGame() {
+            // Sprawdzenie, czy jesteś graczem X
+            const playerX = await contract.playerX();
+            if (userAddress.toLowerCase() === playerX.toLowerCase()) {
+                isX = true;
+                statusDiv.textContent = "Jesteś graczem X.";
+            } else {
+                const playerO = await contract.playerO();
+                if (playerO == "0x0000000000000000000000000000000000000000") {
+                    // Dołącz do gry jako O
+                    try {
+                        statusDiv.textContent = "Dołączasz do gry jako gracz O...";
+                        const tx = await contract.joinGame();
+                        await tx.wait();
+                        isO = true;
+                        statusDiv.textContent = "Dołączono! Jesteś graczem O.";
+                    } catch (error) {
+                        statusDiv.textContent = "Błąd dołączania: " + error.message;
+                    }
+                } else if (userAddress.toLowerCase() === playerO.toLowerCase()) {
+                    isO = true;
+                    statusDiv.textContent = "Jesteś graczem O.";
+                } else {
+                    statusDiv.textContent = "Gra jest już pełna. Oglądasz jako widz.";
+                }
+            }
+
+            renderBoard();
+            contract.on("MoveMade", () => renderBoard());
+            contract.on("GameEnded", (winner, message) => {
+                statusDiv.textContent = message;
+                renderBoard();
+                // Można dodać przycisk do resetowania gry
+            });
+        }
+
+        async function renderBoard() {
+            boardDiv.innerHTML = '';
+            for (let i = 0; i < 9; i++) {
+                const cell = document.createElement('div');
+                cell.classList.add('cell');
+                const value = await contract.board(i);
+                if (value == 1) cell.textContent = "X";
+                else if (value == 2) cell.textContent = "O";
+                cell.onclick = () => makeMove(i);
+                boardDiv.appendChild(cell);
+            }
+        }
+
+        async function makeMove(index) {
+            try {
+                const currentPlayer = await contract.currentPlayer();
+                if (userAddress.toLowerCase() !== currentPlayer.toLowerCase()) {
+                    alert("To nie twój ruch!");
+                    return;
+                }
+                statusDiv.textContent = "Wykonuję ruch...";
+                const tx = await contract.makeMove(index);
+                await tx.wait();
+                statusDiv.textContent = "Ruch wykonany pomyślnie!";
+            } catch (error) {
+                statusDiv.textContent = "Błąd: " + error.message;
+            }
+        }
+
+        connectButton.addEventListener('click', connectWallet);
+
+    </script>
+</body>
+</html>
