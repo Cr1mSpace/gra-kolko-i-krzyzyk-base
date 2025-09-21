@@ -72,7 +72,7 @@
         const contractAddress = "0x9e2d753ebc9186aaa733db9e345f34cd8efa00bb";
 
         // UWAGA! Wklej tutaj skopiowany ABI swojego kontraktu!
-        const contractABI = [ [
+        const contractABI = [
 	{
 		"inputs": [],
 		"stateMutability": "nonpayable",
@@ -233,19 +233,7 @@
 		"stateMutability": "nonpayable",
 		"type": "function"
 	}
-]
-            "function makeMove(uint256 index) public",
-            "function joinGame() public",
-            "function reset() public",
-            "function board(uint256 index) public view returns (uint8)",
-            "function playerX() public view returns (address)",
-            "function playerO() public view returns (address)",
-            "function currentPlayer() public view returns (address)",
-            "function isGameActive() public view returns (bool)",
-            "event MoveMade(uint256 indexed index, uint8 symbol)",
-            "event GameEnded(address indexed winner, string message)"
-        ];
-
+];
         let provider;
         let signer;
         let contract;
